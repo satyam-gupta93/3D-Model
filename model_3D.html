@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Rockfall Prediction Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            overflow: hidden;
+            color: white;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        .dashboard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            width: 320px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .dashboard h2 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .stat-value {
+            font-weight: bold;
+        }
+
+        .risk-high { color: #ff4444; }
+        .risk-medium { color: #ffaa00; }
+        .risk-low { color: #00ff88; }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            width: 250px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls h3 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .control-group input {
+            width: 100%;
+            padding: 8px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .control-group button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: linear-gradient(45deg, #00ff88, #00cc66);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .control-group button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .legend h4 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 10px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            display: none;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #00ff88;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>Initializing 3D Mine Simulator...</div>
+        </div>
+
+        <div class="dashboard">
+            <h2>🏔️ Mine Status Dashboard</h2>
+            <div class="stat-item">
+                <span>Rockfall Risk:</span>
+                <span id="rockfall-risk" class="stat-value risk-medium">Medium (45%)</span>
+            </div>
+            <div class="stat-item">
+                <span>Rainfall:</span>
+                <span id="rainfall" class="stat-value">12.5 mm/hr</span>
+            </div>
+            <div class="stat-item">
+                <span>Vibration Level:</span>
+                <span id="vibration" class="stat-value">2.3 Hz</span>
+            </div>
+            <div class="stat-item">
+                <span>Temperature:</span>
+                <span id="temperature" class="stat-value">24°C</span>
+            </div>
+            <div class="stat-item">
+                <span>Critical Zones:</span>
+                <span id="critical-zones" class="stat-value risk-high">7 Active</span>
+            </div>
+            <div class="stat-item">
+                <span>Slope Stability:</span>
+                <span id="slope-stability" class="stat-value risk-medium">78%</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <h3>⚙️ Simulation Controls</h3>
+            <div class="control-group">
+                <label>Time Speed:</label>
+                <input type="range" id="time-speed" min="0.1" max="5" value="1" step="0.1">
+            </div>
+            <div class="control-group">
+                <label>Weather Intensity:</label>
+                <input type="range" id="weather-intensity" min="0" max="100" value="25">
+            </div>
+            <div class="control-group">
+                <button id="toggle-rain">Toggle Rain</button>
+            </div>
+            <div class="control-group">
+                <button id="reset-simulation">Reset Simulation</button>
+            </div>
+            <div class="control-group">
+                <button id="drone-view">Drone View</button>
+            </div>
+            <div class="control-group">
+                <button id="side-view">Side View</button>
+            </div>
+        </div>
+
+        <div class="legend">
+            <h4>Risk Zones</h4>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #00ff00;"></div>
+                <span>Safe Zone</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ffff00;"></div>
+                <span>Warning Zone</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ff6600;"></div>
+                <span>High Risk Zone</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background-color: #ff0000;"></div>
+                <span>Critical Zone</span>
+            </div>
+        </div>
+
+        <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        class RockfallSimulator {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.controls = null;
+                this.terrain = null;
+                this.rockSegments = [];
+                this.rainSystem = null;
+                this.animationId = null;
+                
+                this.simulation = {
+                    time: 0,
+                    speed: 1,
+                    raining: false,
+                    weatherIntensity: 25
+                };
+
+                this.riskData = {
+                    rockfallRisk: 45,
+                    rainfall: 12.5,
+                    vibration: 2.3,
+                    temperature: 24,
+                    criticalZones: 7,
+                    slopeStability: 78
+                };
+
+                this.init();
+            }
+
+            async init() {
+                try {
+                    this.createScene();
+                    this.createTerrain();
+                    this.createLighting();
+                    this.createRainSystem();
+                    this.setupControls();
+                    this.setupEventListeners();
+                    this.animate();
+                    
+                    document.getElementById('loading').style.display = 'none';
+                } catch (error) {
+                    console.error('Initialization failed:', error);
+                }
+            }
+
+            createScene() {
+                // Scene setup
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.Fog(0x2a5298, 100, 1000);
+                this.scene.background = new THREE.Color(0x87CEEB);
+
+                // Camera
+                this.camera = new THREE.PerspectiveCamera(
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    2000
+                );
+                this.camera.position.set(0, 150, 200);
+
+                // Renderer
+                this.renderer = new THREE.WebGLRenderer({ 
+                    antialias: true,
+                    alpha: true
+                });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.gammaOutput = true;
+                this.renderer.gammaFactor = 2.2;
+
+                document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+            }
+
+            createTerrain() {
+                // Create main terrain base with higher resolution for realistic benches
+                const terrainGeometry = new THREE.PlaneGeometry(500, 500, 80, 80);
+                const vertices = terrainGeometry.attributes.position.array;
+
+                // Generate realistic open pit mine with proper benching
+                for (let i = 0; i < vertices.length; i += 3) {
+                    const x = vertices[i];
+                    const z = vertices[i + 1];
+                    const distance = Math.sqrt(x * x + z * z);
+                    
+                    // Create realistic stepped pit mining levels
+                    let height = 0;
+                    
+                    if (distance < 30) {
+                        // Bottom of pit - working area
+                        height = -120 + Math.random() * 5;
+                    } else if (distance < 60) {
+                        // First bench level
+                        height = -100 + Math.sin(distance * 0.3) * 3;
+                    } else if (distance < 90) {
+                        // Second bench level  
+                        height = -75 + Math.sin(distance * 0.2) * 4;
+                    } else if (distance < 120) {
+                        // Third bench level
+                        height = -50 + Math.sin(distance * 0.15) * 5;
+                    } else if (distance < 150) {
+                        // Fourth bench level
+                        height = -25 + Math.sin(distance * 0.1) * 3;
+                    } else if (distance < 180) {
+                        // Upper benches
+                        height = -10 + Math.sin(distance * 0.08) * 4;
+                    } else {
+                        // Rim and overburden area
+                        height = 5 + Math.random() * 15;
+                    }
+                    
+                    // Add some noise for realistic terrain variation
+                    height += (Math.random() - 0.5) * 3;
+                    vertices[i + 2] = height;
+                }
+
+                terrainGeometry.attributes.position.needsUpdate = true;
+                terrainGeometry.computeVertexNormals();
+
+                // Create more realistic terrain material
+                const terrainMaterial = new THREE.MeshLambertMaterial({
+                    color: 0xa0906b,
+                    wireframe: false
+                });
+
+                this.terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+                this.terrain.rotation.x = -Math.PI / 2;
+                this.terrain.receiveShadow = true;
+                this.scene.add(this.terrain);
+
+                // Add haul roads
+                this.createHaulRoads();
+
+                // Create rock segments with risk zones
+                this.createRockSegments();
+            }
+
+            createHaulRoads() {
+                // Create spiral haul road system
+                const roadMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+                
+                for (let level = 0; level < 5; level++) {
+                    const roadRadius = 60 + level * 30;
+                    const roadHeight = -120 + level * 25;
+                    
+                    for (let i = 0; i < 32; i++) {
+                        const angle = (i / 32) * Math.PI * 2;
+                        const x = Math.cos(angle) * roadRadius;
+                        const z = Math.sin(angle) * roadRadius;
+                        
+                        const roadSegment = new THREE.Mesh(
+                            new THREE.BoxGeometry(8, 1, 3),
+                            roadMaterial
+                        );
+                        roadSegment.position.set(x, roadHeight, z);
+                        roadSegment.rotation.y = angle + Math.PI/2;
+                        this.scene.add(roadSegment);
+                    }
+                }
+            }
+
+            createRockSegments() {
+                const segmentCount = 300;
+                
+                for (let i = 0; i < segmentCount; i++) {
+                    // Distribute rocks more realistically on slope faces
+                    const benchLevel = Math.floor(Math.random() * 6);
+                    const baseRadius = 30 + benchLevel * 25;
+                    const radiusVariation = 15;
+                    
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = baseRadius + (Math.random() - 0.5) * radiusVariation;
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+                    
+                    // Calculate realistic height based on bench level
+                    let y = -120 + benchLevel * 25;
+                    
+                    // Add slope variation - rocks on slopes, not flat areas
+                    if (benchLevel > 0) {
+                        const slopeOffset = (Math.random() - 0.5) * 20;
+                        y += slopeOffset;
+                    }
+
+                    // Vary rock sizes more realistically
+                    const rockType = Math.random();
+                    let size, height;
+                    if (rockType < 0.6) {
+                        // Small debris
+                        size = 1 + Math.random() * 2;
+                        height = size * (0.6 + Math.random() * 0.4);
+                    } else if (rockType < 0.9) {
+                        // Medium rocks
+                        size = 3 + Math.random() * 3;
+                        height = size * (0.7 + Math.random() * 0.3);
+                    } else {
+                        // Large boulders
+                        size = 5 + Math.random() * 4;
+                        height = size * (0.8 + Math.random() * 0.2);
+                    }
+
+                    const geometry = new THREE.BoxGeometry(
+                        size + Math.random() * size * 0.3,
+                        height,
+                        size * (0.8 + Math.random() * 0.4)
+                    );
+                    
+                    // More realistic initial risk assessment
+                    const riskLevel = this.calculateRealisticRisk(radius, y, benchLevel);
+                    const material = new THREE.MeshPhongMaterial({
+                        color: this.getRiskColor(riskLevel),
+                        transparent: true,
+                        opacity: 0.9
+                    });
+
+                    const rock = new THREE.Mesh(geometry, material);
+                    rock.position.set(x, y + height/2, z);
+                    rock.rotation.set(
+                        (Math.random() - 0.5) * 0.3,
+                        Math.random() * Math.PI * 2,
+                        (Math.random() - 0.5) * 0.3
+                    );
+                    rock.castShadow = true;
+                    
+                    // More realistic sensor data
+                    rock.userData = {
+                        riskLevel: riskLevel,
+                        baseRisk: riskLevel, // Store original risk
+                        strain: 20 + Math.random() * 30,
+                        displacement: Math.random() * 2,
+                        porePressure: 15 + Math.random() * 20,
+                        originalY: y + height/2,
+                        benchLevel: benchLevel,
+                        lastRainImpact: 0,
+                        drainageRate: 0.8 + Math.random() * 0.4, // How well water drains
+                        stability: 0.7 + Math.random() * 0.3 // Inherent stability
+                    };
+
+                    this.rockSegments.push(rock);
+                    this.scene.add(rock);
+                }
+            }
+
+            calculateRealisticRisk(distance, y, benchLevel) {
+                let risk = 0.1; // Base minimum risk
+                
+                // Distance from pit center affects stability
+                if (distance < 50) risk += 0.1; // Bottom of pit - generally stable
+                else if (distance < 100) risk += 0.3; // Active mining slopes - higher risk
+                else if (distance < 150) risk += 0.2; // Upper slopes
+                else risk += 0.05; // Rim areas - usually stable
+                
+                // Bench level affects risk (higher benches more exposed to weathering)
+                risk += benchLevel * 0.05;
+                
+                // Depth affects risk (deeper = more stable overburden pressure)
+                if (y < -100) risk -= 0.1;
+                else if (y < -50) risk -= 0.05;
+                else if (y > 0) risk += 0.1; // Surface rocks more weathered
+                
+                // Add realistic random variation
+                risk += (Math.random() - 0.5) * 0.1;
+                
+                return Math.max(0.05, Math.min(0.8, risk)); // Cap between 5% and 80%
+            }
+
+            calculateRiskLevel(distance, y) {
+                // Keep for compatibility, redirect to realistic calculation
+                const benchLevel = Math.floor((-y + 120) / 25);
+                return this.calculateRealisticRisk(distance, y, benchLevel);
+            }
+
+            getRiskColor(riskLevel) {
+                if (riskLevel < 0.25) return 0x00ff00; // Green - Safe
+                if (riskLevel < 0.5) return 0xffff00; // Yellow - Warning  
+                if (riskLevel < 0.75) return 0xff6600; // Orange - High Risk
+                return 0xff0000; // Red - Critical
+            }
+
+            createLighting() {
+                // Ambient light
+                const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+                this.scene.add(ambientLight);
+
+                // Directional light (sun)
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(100, 200, 50);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.mapSize.width = 2048;
+                directionalLight.shadow.mapSize.height = 2048;
+                directionalLight.shadow.camera.near = 0.5;
+                directionalLight.shadow.camera.far = 1000;
+                directionalLight.shadow.camera.left = -300;
+                directionalLight.shadow.camera.right = 300;
+                directionalLight.shadow.camera.top = 300;
+                directionalLight.shadow.camera.bottom = -300;
+                this.scene.add(directionalLight);
+
+                // Point lights for dramatic effect
+                const pointLight1 = new THREE.PointLight(0xffffff, 0.5, 200);
+                pointLight1.position.set(-50, 100, 50);
+                this.scene.add(pointLight1);
+
+                const pointLight2 = new THREE.PointLight(0x88ccff, 0.3, 150);
+                pointLight2.position.set(50, 80, -50);
+                this.scene.add(pointLight2);
+            }
+
+            createRainSystem() {
+                const rainGeometry = new THREE.BufferGeometry();
+                const rainCount = 1000;
+                const positions = new Float32Array(rainCount * 3);
+                const velocities = [];
+
+                for (let i = 0; i < rainCount; i++) {
+                    positions[i * 3] = (Math.random() - 0.5) * 500;
+                    positions[i * 3 + 1] = Math.random() * 200 + 100;
+                    positions[i * 3 + 2] = (Math.random() - 0.5) * 500;
+                    
+                    velocities.push(Math.random() * 2 + 1);
+                }
+
+                rainGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                const rainMaterial = new THREE.PointsMaterial({
+                    color: 0x87CEEB,
+                    size: 2,
+                    transparent: true,
+                    opacity: 0.6
+                });
+
+                this.rainSystem = new THREE.Points(rainGeometry, rainMaterial);
+                this.rainSystem.userData = { velocities };
+                this.rainSystem.visible = false;
+                this.scene.add(this.rainSystem);
+            }
+
+            setupControls() {
+                // Simple orbit controls implementation
+                this.mouse = { x: 0, y: 0 };
+                this.mouseDown = false;
+                this.cameraDistance = 250;
+                this.cameraAngleX = 0;
+                this.cameraAngleY = 0.5;
+
+                this.renderer.domElement.addEventListener('mousedown', (e) => {
+                    this.mouseDown = true;
+                    this.mouse.x = e.clientX;
+                    this.mouse.y = e.clientY;
+                });
+
+                this.renderer.domElement.addEventListener('mouseup', () => {
+                    this.mouseDown = false;
+                });
+
+                this.renderer.domElement.addEventListener('mousemove', (e) => {
+                    if (this.mouseDown) {
+                        const deltaX = e.clientX - this.mouse.x;
+                        const deltaY = e.clientY - this.mouse.y;
+                        
+                        this.cameraAngleX += deltaX * 0.01;
+                        this.cameraAngleY = Math.max(0.1, Math.min(Math.PI - 0.1, this.cameraAngleY + deltaY * 0.01));
+                        
+                        this.mouse.x = e.clientX;
+                        this.mouse.y = e.clientY;
+                    }
+                });
+
+                this.renderer.domElement.addEventListener('wheel', (e) => {
+                    this.cameraDistance = Math.max(50, Math.min(500, this.cameraDistance + e.deltaY * 0.5));
+                });
+
+                // Click detection for tooltips
+                this.renderer.domElement.addEventListener('click', (e) => {
+                    this.onMouseClick(e);
+                });
+
+                // Mouse move for tooltips
+                this.renderer.domElement.addEventListener('mousemove', (e) => {
+                    this.onMouseMove(e);
+                });
+            }
+
+            onMouseClick(event) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const mouse = new THREE.Vector2();
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                const intersects = raycaster.intersectObjects(this.rockSegments);
+
+                if (intersects.length > 0) {
+                    const rock = intersects[0].object;
+                    this.showRockDetails(rock, event);
+                }
+            }
+
+            onMouseMove(event) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const mouse = new THREE.Vector2();
+                mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(mouse, this.camera);
+                const intersects = raycaster.intersectObjects(this.rockSegments);
+
+                const tooltip = document.getElementById('tooltip');
+                if (intersects.length > 0) {
+                    const rock = intersects[0].object;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = event.clientX + 10 + 'px';
+                    tooltip.style.top = event.clientY + 10 + 'px';
+                    tooltip.innerHTML = `
+                        <strong>Rock Segment</strong><br>
+                        Risk Level: ${(rock.userData.riskLevel * 100).toFixed(1)}%<br>
+                        Strain: ${rock.userData.strain.toFixed(1)}%<br>
+                        Displacement: ${rock.userData.displacement.toFixed(2)}mm
+                    `;
+                } else {
+                    tooltip.style.display = 'none';
+                }
+            }
+
+            showRockDetails(rock, event) {
+                const data = rock.userData;
+                alert(`Rock Segment Details:
+Risk Level: ${(data.riskLevel * 100).toFixed(1)}%
+Strain: ${data.strain.toFixed(1)}%
+Displacement: ${data.displacement.toFixed(2)}mm
+Pore Pressure: ${data.porePressure.toFixed(1)} kPa`);
+            }
+
+            setupEventListeners() {
+                // Time speed control
+                document.getElementById('time-speed').addEventListener('input', (e) => {
+                    this.simulation.speed = parseFloat(e.target.value);
+                });
+
+                // Weather intensity
+                document.getElementById('weather-intensity').addEventListener('input', (e) => {
+                    this.simulation.weatherIntensity = parseInt(e.target.value);
+                });
+
+                // Toggle rain
+                document.getElementById('toggle-rain').addEventListener('click', () => {
+                    this.simulation.raining = !this.simulation.raining;
+                    this.rainSystem.visible = this.simulation.raining;
+                });
+
+                // Reset simulation
+                document.getElementById('reset-simulation').addEventListener('click', () => {
+                    this.resetSimulation();
+                });
+
+                // Camera views
+                document.getElementById('drone-view').addEventListener('click', () => {
+                    this.setDroneView();
+                });
+
+                document.getElementById('side-view').addEventListener('click', () => {
+                    this.setSideView();
+                });
+
+                // Window resize
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+
+            setDroneView() {
+                this.cameraAngleX = 0;
+                this.cameraAngleY = 0.1;
+                this.cameraDistance = 300;
+            }
+
+            setSideView() {
+                this.cameraAngleX = Math.PI / 2;
+                this.cameraAngleY = Math.PI / 2;
+                this.cameraDistance = 200;
+            }
+
+            resetSimulation() {
+                this.simulation.time = 0;
+                this.rockSegments.forEach(rock => {
+                    // Reset to base risk levels, not zero
+                    rock.userData.riskLevel = rock.userData.baseRisk;
+                    rock.userData.lastRainImpact = 0;
+                    rock.userData.strain = 20 + Math.random() * 30;
+                    rock.userData.displacement = Math.random() * 2;
+                    rock.userData.porePressure = 15 + Math.random() * 20;
+                    rock.material.color.setHex(this.getRiskColor(rock.userData.baseRisk));
+                    rock.material.emissive.setHex(0x000000);
+                    rock.material.emissiveIntensity = 0;
+                });
+            }
+
+            updateSimulation() {
+                this.simulation.time += 0.016 * this.simulation.speed;
+
+                // Calculate realistic environmental effects
+                const baseWeatherEffect = this.simulation.raining ? 
+                    this.simulation.weatherIntensity * 0.0001 : -0.00005; // Gradual drying
+
+                // Update rock segments with realistic behavior
+                this.rockSegments.forEach((rock, index) => {
+                    const userData = rock.userData;
+                    
+                    // Gradual natural weathering (very slow)
+                    const naturalWeathering = 0.000002;
+                    
+                    // Rain effects - realistic and gradual
+                    let rainEffect = 0;
+                    if (this.simulation.raining) {
+                        // Rain accumulates over time, not instantly
+                        userData.lastRainImpact += baseWeatherEffect * (1 / userData.drainageRate);
+                        
+                        // Steeper slopes (higher bench levels) more affected by rain
+                        const slopeMultiplier = 1 + (userData.benchLevel * 0.2);
+                        rainEffect = userData.lastRainImpact * slopeMultiplier;
+                        
+                        // Cap rain effect to prevent immediate critical states
+                        rainEffect = Math.min(rainEffect, 0.15);
+                    } else {
+                        // Gradual drainage when not raining
+                        userData.lastRainImpact *= userData.drainageRate;
+                        rainEffect = userData.lastRainImpact * 0.5;
+                    }
+                    
+                    // Periodic stress variations (mining vibrations, thermal cycling)
+                    const periodicStress = Math.sin(this.simulation.time * 0.05 + index * 0.1) * 0.02;
+                    
+                    // Update risk level gradually and realistically
+                    const oldRisk = userData.riskLevel;
+                    userData.riskLevel = userData.baseRisk + rainEffect + naturalWeathering + periodicStress;
+                    
+                    // Apply stability factor to prevent unrealistic jumps
+                    const maxChange = 0.02; // Maximum change per frame
+                    const riskDiff = userData.riskLevel - oldRisk;
+                    if (Math.abs(riskDiff) > maxChange) {
+                        userData.riskLevel = oldRisk + Math.sign(riskDiff) * maxChange;
+                    }
+                    
+                    // Keep within realistic bounds
+                    userData.riskLevel = Math.max(0.02, Math.min(0.95, userData.riskLevel));
+                    
+                    // Update color smoothly
+                    const newColor = this.getRiskColor(userData.riskLevel);
+                    rock.material.color.setHex(newColor);
+                    
+                    // Glow effect only for truly critical zones (>85%)
+                    if (userData.riskLevel > 0.85) {
+                        const glowIntensity = 0.3 + 0.3 * Math.sin(this.simulation.time * 3 + index);
+                        rock.material.emissive.setHex(0x440000);
+                        rock.material.emissiveIntensity = glowIntensity * 0.2;
+                    } else if (userData.riskLevel > 0.7) {
+                        // Subtle warning glow for high risk
+                        rock.material.emissive.setHex(0x442200);
+                        rock.material.emissiveIntensity = 0.05;
+                    } else {
+                        rock.material.emissive.setHex(0x000000);
+                        rock.material.emissiveIntensity = 0;
+                    }
+
+                    // Update sensor data more realistically
+                    const riskFactor = userData.riskLevel / userData.baseRisk;
+                    userData.strain = Math.max(0, userData.strain + (riskFactor - 1) * 0.5);
+                    userData.displacement += (riskFactor - 1) * 0.01;
+                    userData.porePressure = Math.max(0, userData.porePressure + rainEffect * 200);
+                    
+                    // Gradual pore pressure reduction when not raining
+                    if (!this.simulation.raining) {
+                        userData.porePressure *= 0.998;
+                    }
+                });
+
+                // Update rain animation
+                if (this.simulation.raining && this.rainSystem.visible) {
+                    const positions = this.rainSystem.geometry.attributes.position.array;
+                    const velocities = this.rainSystem.userData.velocities;
+                    
+                    for (let i = 0; i < positions.length; i += 3) {
+                        positions[i + 1] -= velocities[i / 3] * this.simulation.weatherIntensity * 0.05;
+                        if (positions[i + 1] < -100) {
+                            positions[i + 1] = 200 + Math.random() * 50;
+                            positions[i] = (Math.random() - 0.5) * 600;
+                            positions[i + 2] = (Math.random() - 0.5) * 600;
+                        }
+                    }
+                    this.rainSystem.geometry.attributes.position.needsUpdate = true;
+                }
+
+                // Update dashboard
+                this.updateDashboard();
+            }
+
+            updateDashboard() {
+                // Calculate current risk statistics
+                const highRiskRocks = this.rockSegments.filter(rock => rock.userData.riskLevel > 0.75).length;
+                const averageRisk = this.rockSegments.reduce((sum, rock) => sum + rock.userData.riskLevel, 0) / this.rockSegments.length;
+                
+                // Update dashboard values
+                const riskPercent = Math.round(averageRisk * 100);
+                document.getElementById('rockfall-risk').textContent = `${this.getRiskLevel(averageRisk)} (${riskPercent}%)`;
+                document.getElementById('rockfall-risk').className = `stat-value ${this.getRiskClass(averageRisk)}`;
+                
+                document.getElementById('rainfall').textContent = this.simulation.raining ? 
+                    `${(this.simulation.weatherIntensity * 0.5).toFixed(1)} mm/hr` : '0.0 mm/hr';
+                
+                document.getElementById('vibration').textContent = `${(2 + Math.sin(this.simulation.time) * 0.5).toFixed(1)} Hz`;
+                
+                document.getElementById('temperature').textContent = `${(24 + Math.sin(this.simulation.time * 0.1) * 3).toFixed(0)}°C`;
+                
+                document.getElementById('critical-zones').textContent = `${highRiskRocks} Active`;
+                document.getElementById('critical-zones').className = `stat-value ${highRiskRocks > 10 ? 'risk-high' : highRiskRocks > 5 ? 'risk-medium' : 'risk-low'}`;
+                
+                const stability = Math.max(0, 100 - averageRisk * 50);
+                document.getElementById('slope-stability').textContent = `${stability.toFixed(0)}%`;
+                document.getElementById('slope-stability').className = `stat-value ${stability < 60 ? 'risk-high' : stability < 80 ? 'risk-medium' : 'risk-low'}`;
+            }
+
+            getRiskLevel(risk) {
+                if (risk < 0.25) return 'Low';
+                if (risk < 0.5) return 'Medium';
+                if (risk < 0.75) return 'High';
+                return 'Critical';
+            }
+
+            getRiskClass(risk) {
+                if (risk < 0.25) return 'risk-low';
+                if (risk < 0.5) return 'risk-medium';
+                return 'risk-high';
+            }
+
+            updateCamera() {
+                const x = Math.sin(this.cameraAngleY) * Math.cos(this.cameraAngleX) * this.cameraDistance;
+                const y = Math.cos(this.cameraAngleY) * this.cameraDistance;
+                const z = Math.sin(this.cameraAngleY) * Math.sin(this.cameraAngleX) * this.cameraDistance;
+                
+                this.camera.position.set(x, y, z);
+                this.camera.lookAt(0, 0, 0);
+            }
+
+            animate() {
+                this.animationId = requestAnimationFrame(() => this.animate());
+                
+                this.updateSimulation();
+                this.updateCamera();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            dispose() {
+                if (this.animationId) {
+                    cancelAnimationFrame(this.animationId);
+                }
+                
+                // Clean up geometries and materials
+                this.rockSegments.forEach(rock => {
+                    rock.geometry.dispose();
+                    rock.material.dispose();
+                });
+                
+                if (this.terrain) {
+                    this.terrain.geometry.dispose();
+                    this.terrain.material.dispose();
+                }
+                
+                if (this.rainSystem) {
+                    this.rainSystem.geometry.dispose();
+                    this.rainSystem.material.dispose();
+                }
+                
+                this.renderer.dispose();
+            }
+        }
+
+        // Initialize the simulator when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            const simulator = new RockfallSimulator();
+            
+            // Handle page unload
+            window.addEventListener('beforeunload', () => {
+                simulator.dispose();
+            });
+        });
+    </script>
+</body>
+</html>
